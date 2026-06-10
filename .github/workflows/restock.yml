@@ -1,0 +1,56 @@
+name: Amul restock check
+
+on:
+  schedule:
+    # Every 5 minutes. NOTE: GitHub runs scheduled jobs on a best-effort basis,
+    # so the real cadence is usually ~5-15 min and can occasionally be skipped.
+    - cron: '*/5 * * * *'
+  workflow_dispatch: {}   # run manually from the Actions tab
+
+permissions:
+  contents: write          # allows committing the updated state.json
+
+concurrency:
+  group: amul-restock
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - run: npm ci
+
+      - run: npx playwright install --with-deps chromium
+
+      - name: Check stock
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          # Optional overrides — set these as repo Variables to customize without editing code:
+          AMUL_PINCODE: ${{ vars.AMUL_PINCODE }}
+          AMUL_ALIASES: ${{ vars.AMUL_ALIASES }}
+        run: node check.mjs
+
+      - name: Persist state
+        run: |
+          if [ -n "$(git status --porcelain state.json)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add state.json
+            git commit -m "chore: update restock state [skip ci]"
+            git push
+          else
+            echo "state unchanged — nothing to commit"
+          fi

@@ -1,0 +1,13 @@
+{
+  "name": "amul-restock-alerts",
+  "version": "1.0.0",
+  "description": "Restock notifier for sold-out Amul D2C products (Discord + GitHub Actions cron)",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "check": "node check.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.49.1"
+  }
+}
