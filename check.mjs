@@ -27,7 +27,9 @@ const log = (...a) => console.log(new Date().toISOString(), ...a);
 
 async function loadState() {
   try {
-    return JSON.parse(await readFile(STATE_FILE, 'utf8'));
+    let raw = await readFile(STATE_FILE, 'utf8');
+    if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1); // tolerate a UTF-8 BOM (e.g. hand-edited on Windows)
+    return JSON.parse(raw);
   } catch {
     return null; // null => first run
   }
@@ -61,6 +63,23 @@ function restockEmbed(p) {
           { name: 'Buy', value: `[Open product page](${url})`, inline: true },
           { name: 'Inventory', value: String(p.inventory_quantity ?? '—'), inline: true },
         ],
+        timestamp: new Date().toISOString(),
+      },
+    ],
+  };
+}
+
+function soldOutEmbed(p) {
+  const url = PRODUCT_BASE + p.alias;
+  return {
+    username: 'Amul Restock Bot',
+    content: `🔴 **Sold out again** — ${p.name}`,
+    embeds: [
+      {
+        title: p.name,
+        url,
+        color: 0xe74c3c,
+        description: `No longer available for delivery to **${PINCODE}**. I'll ping you again when it's back in stock.`,
         timestamp: new Date().toISOString(),
       },
     ],
@@ -138,6 +157,7 @@ async function main() {
   const now = new Date().toISOString();
   const nextState = {};
   const restocked = [];
+  const wentOOS = [];
 
   for (const alias of ALIASES) {
     const p = products[alias];
@@ -159,6 +179,7 @@ async function main() {
     log(`${alias} -> available=${p.available} inventory=${p.inventory_quantity} inStock=${inStock}`);
 
     if (!firstRun && inStock && !wasInStock) restocked.push(p);
+    if (!firstRun && !inStock && wasInStock) wentOOS.push(p);
   }
 
   // Notify.
@@ -169,7 +190,7 @@ async function main() {
     });
     await sendDiscord({
       username: 'Amul Restock Bot',
-      content: `✅ **Monitoring started** for pincode **${PINCODE}**. You'll get a ping when any of these comes back in stock:\n${lines.join('\n')}`,
+      content: `✅ **Monitoring started** for pincode **${PINCODE}**. You'll get a ping whenever any of these comes back in stock — or sells out again:\n${lines.join('\n')}`,
     });
     log('first run — baseline set, sent startup summary');
   } else {
@@ -177,7 +198,11 @@ async function main() {
       log('RESTOCK detected:', p.alias);
       await sendDiscord(restockEmbed(p));
     }
-    if (restocked.length === 0) log('no restock transitions this run');
+    for (const p of wentOOS) {
+      log('SOLD OUT detected:', p.alias);
+      await sendDiscord(soldOutEmbed(p));
+    }
+    if (restocked.length === 0 && wentOOS.length === 0) log('no stock transitions this run');
   }
 
   await writeFile(STATE_FILE, JSON.stringify(nextState, null, 2) + '\n');

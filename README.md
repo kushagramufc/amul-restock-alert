@@ -1,6 +1,6 @@
 # Amul restock alerts → Discord
 
-Get a Discord ping the moment a sold-out Amul product comes back in stock **for your pincode**.
+Get a Discord ping the moment a sold-out Amul product comes back in stock **for your pincode** — and again when it sells out.
 
 Currently watching (pincode **560102**):
 
@@ -13,7 +13,7 @@ Currently watching (pincode **560102**):
 
 1. **Playwright** (headless Chromium) opens the store and sets delivery pincode **560102**. This binds your region's "substore" to the session — without it the API hides all products.
 2. The store's own product API is then read for each SKU. The reliable in-stock signal is the **`available`** flag (`1` = buyable, `0` = sold out). `inventory_quantity` is *not* used — a SKU can show units but still be unbuyable for your pincode.
-3. State is saved in `state.json`. A Discord alert fires **only on a sold-out → in-stock transition**, so you won't get repeat spam while something stays in stock.
+3. State is saved in `state.json`. A Discord alert fires on a **status change in either direction** — 🟢 sold-out → in-stock ("Back in stock!") and 🔴 in-stock → sold-out ("Sold out again") — but only on the change itself, so you won't get repeat spam while the status holds.
 
 It runs on a **GitHub Actions cron** — no server to manage, free for public repos.
 
