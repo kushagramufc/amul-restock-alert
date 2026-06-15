@@ -38,6 +38,7 @@ jobs:
       - name: Check stock
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           # Optional overrides — set these as repo Variables to customize without editing code:
           AMUL_PINCODE: ${{ vars.AMUL_PINCODE }}
           AMUL_ALIASES: ${{ vars.AMUL_ALIASES }}

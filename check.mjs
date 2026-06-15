@@ -1,9 +1,11 @@
 // Amul restock checker — Playwright binds the delivery pincode, then reads each
-// SKU's `available` flag from the store's own product API. Alerts Discord on a
-// sold-out -> in-stock transition. Designed to run on a GitHub Actions cron.
+// SKU's `available` flag from the store's own product API. Alerts Discord and/or
+// ntfy (phone push) on stock-status changes. Runs on a GitHub Actions cron.
 //
-// Config via env (all optional except the webhook for alerts):
-//   DISCORD_WEBHOOK_URL  Discord webhook to post alerts to (no alerts if unset)
+// Config via env (all optional; set at least one notifier to get alerts):
+//   DISCORD_WEBHOOK_URL  Discord webhook to post alerts to
+//   NTFY_TOPIC           ntfy topic to push phone notifications to
+//   NTFY_SERVER          ntfy server base URL (default https://ntfy.sh)
 //   AMUL_PINCODE         delivery pincode (default 560102)
 //   AMUL_ALIASES         comma-separated product aliases (defaults below)
 
@@ -18,6 +20,8 @@ const ALIASES = (process.env.AMUL_ALIASES?.trim()
       'amul-chocolate-whey-protein-34-g-or-pack-of-60-sachets',
     ]);
 const WEBHOOK = process.env.DISCORD_WEBHOOK_URL?.trim() || '';
+const NTFY_TOPIC = process.env.NTFY_TOPIC?.trim() || '';
+const NTFY_SERVER = (process.env.NTFY_SERVER?.trim() || 'https://ntfy.sh').replace(/\/$/, '');
 const STATE_FILE = new URL('./state.json', import.meta.url);
 const PRODUCT_BASE = 'https://shop.amul.com/en/product/';
 const UA =
@@ -46,6 +50,25 @@ async function sendDiscord(payload) {
     body: JSON.stringify(payload),
   });
   if (!res.ok) log('Discord POST failed', res.status, (await res.text()).slice(0, 200));
+}
+
+// Push a phone notification via ntfy. `tags` render as emoji/icons; `click` opens on tap.
+async function sendNtfy({ title, message, click, tags, priority }) {
+  if (!NTFY_TOPIC) {
+    log('(no NTFY_TOPIC set — would have pushed)', title, '—', message);
+    return;
+  }
+  const headers = { 'Content-Type': 'text/plain; charset=utf-8' };
+  if (title) headers['X-Title'] = title; // ASCII only — emoji goes in tags, not here
+  if (click) headers['X-Click'] = click;
+  if (tags) headers['X-Tags'] = tags;
+  if (priority) headers['X-Priority'] = String(priority);
+  try {
+    const res = await fetch(`${NTFY_SERVER}/${NTFY_TOPIC}`, { method: 'POST', headers, body: message ?? '' });
+    if (!res.ok) log('ntfy POST failed', res.status, (await res.text()).slice(0, 200));
+  } catch (e) {
+    log('ntfy POST error', e.message);
+  }
 }
 
 function restockEmbed(p) {
@@ -192,15 +215,22 @@ async function main() {
       username: 'Amul Restock Bot',
       content: `✅ **Monitoring started** for pincode **${PINCODE}**. You'll get a ping whenever any of these comes back in stock — or sells out again:\n${lines.join('\n')}`,
     });
+    const ntfyLines = ALIASES.map((a) => {
+      const p = products[a];
+      return `${p ? p.name : a}: ${p && p.available === 1 ? 'in stock' : 'sold out'}`;
+    });
+    await sendNtfy({ title: 'Monitoring started', message: `Pincode ${PINCODE}\n${ntfyLines.join('\n')}`, tags: 'white_check_mark' });
     log('first run — baseline set, sent startup summary');
   } else {
     for (const p of restocked) {
       log('RESTOCK detected:', p.alias);
       await sendDiscord(restockEmbed(p));
+      await sendNtfy({ title: 'Back in stock!', message: p.name, click: PRODUCT_BASE + p.alias, tags: 'green_circle', priority: 'high' });
     }
     for (const p of wentOOS) {
       log('SOLD OUT detected:', p.alias);
       await sendDiscord(soldOutEmbed(p));
+      await sendNtfy({ title: 'Sold out again', message: p.name, click: PRODUCT_BASE + p.alias, tags: 'red_circle' });
     }
     if (restocked.length === 0 && wentOOS.length === 0) log('no stock transitions this run');
   }

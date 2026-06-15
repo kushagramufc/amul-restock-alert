@@ -42,6 +42,16 @@ git push -u origin main
 ### 4. Turn it on
 Go to the **Actions** tab, enable workflows if prompted, open **“Amul restock check”**, and click **Run workflow**. Within a minute you should get a **“✅ Monitoring started”** message in Discord listing both SKUs' current status — that confirms everything is wired up. After that it runs automatically on the cron.
 
+## Phone push (ntfy) — optional second channel
+
+Get the same alerts pushed to your phone. Works alongside Discord (or on its own).
+
+1. **Install the ntfy app** — [iOS](https://apps.apple.com/app/ntfy/id1625396347) or [Android](https://play.google.com/store/apps/details?id=io.heckel.ntfy), or just use [ntfy.sh](https://ntfy.sh) in a browser.
+2. **Subscribe to your private topic.** In the app tap **+**, then enter your topic name — a long random string that acts like a private channel (e.g. `amul-restock-ab12cd34ef56`). Anyone who knows the topic can read your alerts, so keep it secret and **never commit it** to this public repo.
+3. **Add it as a repo secret** so the cron can push to it: **Settings → Secrets and variables → Actions → New repository secret** → name `NTFY_TOPIC`, value = your topic.
+
+Restocks and sold-outs now also ping your phone; tapping a notification opens the product page. To turn it off, just delete the `NTFY_TOPIC` secret.
+
 ## Customizing
 
 Edit the constants at the top of [`check.mjs`](check.mjs), **or** set these as repo **Variables** (Settings → Secrets and variables → Actions → *Variables*) — no code change needed:
