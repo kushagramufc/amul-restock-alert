@@ -18,6 +18,7 @@ const ALIASES = (process.env.AMUL_ALIASES?.trim()
   : [
       'amul-chocolate-whey-protein-34-g-or-pack-of-30-sachets',
       'amul-chocolate-whey-protein-34-g-or-pack-of-60-sachets',
+    'amul-whey-protein-32-g-or-pack-of-60-sachets',
     ]);
 const WEBHOOK = process.env.DISCORD_WEBHOOK_URL?.trim() || '';
 const NTFY_TOPIC = process.env.NTFY_TOPIC?.trim() || '';
